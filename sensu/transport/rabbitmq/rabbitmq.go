@@ -2,9 +2,9 @@ package rabbitmq
 
 import (
 	"errors"
-	"github.com/upfluence/goutils/log"
+	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
 
-	"github.com/streadway/amqp"
+	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/streadway/amqp"
 )
 
 type RabbitMQTransport struct {
