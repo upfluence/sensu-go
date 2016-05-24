@@ -2,7 +2,7 @@ package rabbitmq
 
 import (
 	"errors"
-	"log"
+	"github.com/upfluence/goutils/log"
 
 	"github.com/streadway/amqp"
 )
@@ -28,18 +28,18 @@ func (t *RabbitMQTransport) Connect() error {
 	t.Connection, err = amqp.Dial(t.URI)
 
 	if err != nil {
-		log.Printf("RabbitMQ connection error : %s", err.Error())
+		log.Errorf("RabbitMQ connection error: %s", err.Error())
 		return err
 	}
 
 	t.Channel, err = t.Connection.Channel()
 
 	if err != nil {
-		log.Printf("RabbitMQ channel error : %s", err.Error())
+		log.Errorf("RabbitMQ channel error: %s", err.Error())
 		return err
 	}
 
-	log.Printf("RabbitMQ connection and channel opened to %s", t.URI)
+	log.Noticef("RabbitMQ connection and channel opened to %s", t.URI)
 
 	t.ClosingChannel = make(chan bool)
 	return nil
@@ -94,11 +94,11 @@ func (t *RabbitMQTransport) Subscribe(key, exchangeName, queueName string, messa
 		false,
 		amqp.Table{},
 	); err != nil {
-		log.Printf("Can't declare the exchange: %s", err.Error())
+		log.Errorf("Can't declare the exchange: %s", err.Error())
 		return err
 	}
 
-	log.Printf("Exchange %s declared", exchangeName)
+	log.Infof("Exchange %s declared", exchangeName)
 
 	if _, err := t.Channel.QueueDeclare(
 		queueName,
@@ -108,25 +108,25 @@ func (t *RabbitMQTransport) Subscribe(key, exchangeName, queueName string, messa
 		false,
 		nil,
 	); err != nil {
-		log.Printf("Can't declare the queue: %s", err.Error())
+		log.Errorf("Can't declare the queue: %s", err.Error())
 		return err
 	}
 
-	log.Printf("Queue %s declared", queueName)
+	log.Infof("Queue %s declared", queueName)
 
 	if err := t.Channel.QueueBind(queueName, key, exchangeName, false, nil); err != nil {
-		log.Printf("Can't bind the queue: %s", err.Error())
+		log.Errorf("Can't bind the queue: %s", err.Error())
 		return err
 	}
 
-	log.Printf("Queue %s binded to %s for key %s", queueName, exchangeName, key)
+	log.Noticef("Queue %s binded to %s for key %s", queueName, exchangeName, key)
 
 	deliveryChange, err := t.Channel.Consume(queueName, "", true, false, false, false, nil)
 
-	log.Printf("Consuming the queue %s", queueName)
+	log.Infof("Consuming the queue %s", queueName)
 
 	if err != nil {
-		log.Printf("Can't consume the queue: %s", err.Error())
+		log.Errorf("Can't consume the queue: %s", err.Error())
 		return err
 	}
 
