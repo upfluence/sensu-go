@@ -9,8 +9,8 @@ import (
 )
 
 type Client struct {
-	client.Client
 	Timestamp int64 `json:"timestamp"`
+	client.Client
 }
 
 type Check struct {
