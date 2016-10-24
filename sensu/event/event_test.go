@@ -37,8 +37,8 @@ func TestUnmarshalEvent(t *testing.T) {
 					ID:     "foo",
 					Action: "create",
 					Client: Client{
-						client.Client{Name: "i-424242"},
 						0,
+						client.Client{Name: "i-424242"},
 					},
 					Check: Check{
 						Name:       "fiz",
