@@ -2,20 +2,37 @@ package rabbitmq
 
 import (
 	"errors"
-	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
+	"math/rand"
+	"time"
 
-	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/streadway/amqp"
+	"github.com/upfluence/sensu-client-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
+
+	"github.com/upfluence/sensu-client-go/Godeps/_workspace/src/github.com/streadway/amqp"
 )
 
 type RabbitMQTransport struct {
-	URI            string
 	Connection     *amqp.Connection
 	Channel        *amqp.Channel
 	ClosingChannel chan bool
+	Configs        []*RabbitMQTransportConfig
 }
 
-func NewRabbitMQTransport(uri string) *RabbitMQTransport {
-	return &RabbitMQTransport{URI: uri, ClosingChannel: make(chan bool)}
+func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
+	config, err := NewRabbitMQTransportConfig(uri)
+
+	if err != nil {
+		log.Errorf("Received invalid URI %s", err)
+		return nil, err
+	}
+
+	return NewRabbitMQHATransport([]*RabbitMQTransportConfig{config}), nil
+}
+
+func NewRabbitMQHATransport(configs []*RabbitMQTransportConfig) *RabbitMQTransport {
+	return &RabbitMQTransport{
+		ClosingChannel: make(chan bool),
+		Configs:        configs,
+	}
 }
 
 func (t *RabbitMQTransport) GetClosingChan() chan bool {
@@ -23,9 +40,45 @@ func (t *RabbitMQTransport) GetClosingChan() chan bool {
 }
 
 func (t *RabbitMQTransport) Connect() error {
+	var uri string
 	var err error
+	randGenerator := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	t.Connection, err = amqp.Dial(t.URI)
+	for _, idx := range randGenerator.Perm(len(t.Configs)) {
+		config := t.Configs[idx]
+		uri = config.GetURI()
+
+		log.Noticef("Trying to connect to URI: %s", uri)
+
+		// TODO: Figure out how to specify the Prefetch value as well
+		// See amqp.Channel.Qos (it doesn't seem to be used currently)
+
+		// TODO: Add SSL support via amqp.DialTLS
+
+		heartbeatString := config.Heartbeat.String()
+		if heartbeatString == "" {
+			heartbeat, err := time.ParseDuration(heartbeatString)
+
+			if err != nil {
+				log.Warningf("Failed to parse the heartbeat: %s", uri, err.Error())
+				continue
+			}
+
+			t.Connection, err = amqp.DialConfig(uri, amqp.Config{
+				Heartbeat: heartbeat,
+			})
+		} else {
+			// Use amqp.defaultHeartbeat (10s)
+			t.Connection, err = amqp.Dial(uri)
+		}
+
+		if err != nil {
+			log.Warningf("Failed to connect to URI %s: %s", uri, err.Error())
+			continue
+		}
+
+		break
+	}
 
 	if err != nil {
 		log.Errorf("RabbitMQ connection error: %s", err.Error())
@@ -39,7 +92,7 @@ func (t *RabbitMQTransport) Connect() error {
 		return err
 	}
 
-	log.Noticef("RabbitMQ connection and channel opened to %s", t.URI)
+	log.Noticef("RabbitMQ connection and channel opened to %s", uri)
 
 	closeChan := make(chan *amqp.Error)
 	t.Channel.NotifyClose(closeChan)
