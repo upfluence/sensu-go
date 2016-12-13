@@ -56,7 +56,7 @@ func (t *RabbitMQTransport) Connect() error {
 		// TODO: Add SSL support via amqp.DialTLS
 
 		heartbeatString := config.Heartbeat.String()
-		if heartbeatString == "" {
+		if heartbeatString != "" {
 			heartbeat, err := time.ParseDuration(heartbeatString)
 
 			if err != nil {
