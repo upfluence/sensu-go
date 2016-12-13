@@ -57,7 +57,8 @@ func (t *RabbitMQTransport) Connect() error {
 
 		heartbeatString := config.Heartbeat.String()
 		if heartbeatString != "" {
-			heartbeat, err := time.ParseDuration(heartbeatString)
+			var heartbeat time.Duration
+			heartbeat, err = time.ParseDuration(heartbeatString)
 
 			if err != nil {
 				log.Warningf("Failed to parse the heartbeat: %s", uri, err.Error())
