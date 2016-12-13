@@ -11,7 +11,9 @@ import (
 	"github.com/upfluence/goutils/log"
 )
 
-type RabbitMQTransportConfig struct {
+var errNoUserInURI = errors.New("No user found in URI")
+
+type TransportConfig struct {
 	Host      string      `json:"host,omitempty"`
 	Port      json.Number `json:"port,omitempty"`
 	Vhost     string      `json:"vhost,omitempty"`
@@ -27,7 +29,7 @@ type RabbitMQTransportConfig struct {
 	uri string `json:"-"`
 }
 
-func (c *RabbitMQTransportConfig) GetURI() string {
+func (c *TransportConfig) GetURI() string {
 	if c.uri == "" {
 		c.uri = fmt.Sprintf(
 			"amqp://%s:%s@%s:%s/%s",
@@ -42,7 +44,7 @@ func (c *RabbitMQTransportConfig) GetURI() string {
 	return c.uri
 }
 
-func NewRabbitMQTransportConfig(uri string) (*RabbitMQTransportConfig, error) {
+func NewTransportConfig(uri string) (*TransportConfig, error) {
 	uriComponents, err := url.Parse(uri)
 	if err != nil {
 		log.Errorf("Failed to parse the URI: %s", err)
@@ -61,10 +63,14 @@ func NewRabbitMQTransportConfig(uri string) (*RabbitMQTransportConfig, error) {
 		return nil, err
 	}
 
+	if uriComponents.User == nil {
+		return nil, errNoUserInURI
+	}
+
 	user := uriComponents.User.Username()
 	password, _ := uriComponents.User.Password()
 
-	return &RabbitMQTransportConfig{
+	return &TransportConfig{
 		Host:     host,
 		Port:     json.Number(port),
 		Vhost:    uriComponents.Path[1:], // Discard the leading slash

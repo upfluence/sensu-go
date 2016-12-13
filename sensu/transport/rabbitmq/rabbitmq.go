@@ -14,21 +14,21 @@ type RabbitMQTransport struct {
 	Connection     *amqp.Connection
 	Channel        *amqp.Channel
 	ClosingChannel chan bool
-	Configs        []*RabbitMQTransportConfig
+	Configs        []*TransportConfig
 }
 
 func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
-	config, err := NewRabbitMQTransportConfig(uri)
+	config, err := NewTransportConfig(uri)
 
 	if err != nil {
 		log.Errorf("Received invalid URI %s", err)
 		return nil, err
 	}
 
-	return NewRabbitMQHATransport([]*RabbitMQTransportConfig{config}), nil
+	return NewRabbitMQHATransport([]*TransportConfig{config}), nil
 }
 
-func NewRabbitMQHATransport(configs []*RabbitMQTransportConfig) *RabbitMQTransport {
+func NewRabbitMQHATransport(configs []*TransportConfig) *RabbitMQTransport {
 	return &RabbitMQTransport{
 		ClosingChannel: make(chan bool),
 		Configs:        configs,
