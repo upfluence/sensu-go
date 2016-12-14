@@ -39,9 +39,11 @@ func (t *RabbitMQTransport) GetClosingChan() chan bool {
 }
 
 func (t *RabbitMQTransport) Connect() error {
-	var uri string
-	var err error
-	randGenerator := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var (
+		uri           string
+		err           error
+		randGenerator = rand.New(rand.NewSource(time.Now().UnixNano()))
+	)
 
 	for _, idx := range randGenerator.Perm(len(t.Configs)) {
 		config := t.Configs[idx]
@@ -64,9 +66,10 @@ func (t *RabbitMQTransport) Connect() error {
 				continue
 			}
 
-			t.Connection, err = amqp.DialConfig(uri, amqp.Config{
-				Heartbeat: heartbeat,
-			})
+			t.Connection, err = amqp.DialConfig(
+				uri,
+				amqp.Config{Heartbeat: heartbeat},
+			)
 		} else {
 			// Use amqp.defaultHeartbeat (10s)
 			t.Connection, err = amqp.Dial(uri)
