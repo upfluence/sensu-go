@@ -25,23 +25,17 @@ type TransportConfig struct {
 		CertChainFile  string `json:"cert_chain_file,omitempty"`
 		PrivateKeyFile string `json:"private_key_file,omitempty"`
 	} `json:"ssl,omitempty"`
-
-	uri string `json:"-"`
 }
 
 func (c *TransportConfig) GetURI() string {
-	if c.uri == "" {
-		c.uri = fmt.Sprintf(
-			"amqp://%s:%s@%s:%s/%s",
-			c.User,
-			c.Password,
-			c.Host,
-			c.Port.String(),
-			url.QueryEscape(c.Vhost),
-		)
-	}
-
-	return c.uri
+	return fmt.Sprintf(
+		"amqp://%s:%s@%s:%s/%s",
+		c.User,
+		c.Password,
+		c.Host,
+		c.Port.String(),
+		url.QueryEscape(c.Vhost),
+	)
 }
 
 func NewTransportConfig(uri string) (*TransportConfig, error) {
