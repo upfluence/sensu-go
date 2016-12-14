@@ -7,8 +7,6 @@ import (
 	"net"
 	"net/url"
 	"strings"
-
-	"github.com/upfluence/goutils/log"
 )
 
 var errNoUserInURI = errors.New("No user found in URI")
@@ -41,20 +39,16 @@ func (c *TransportConfig) GetURI() string {
 func NewTransportConfig(uri string) (*TransportConfig, error) {
 	uriComponents, err := url.Parse(uri)
 	if err != nil {
-		log.Errorf("Failed to parse the URI: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse the URI: %s", err)
 	}
 
 	if !strings.Contains(uriComponents.Host, ":") {
-		message := fmt.Sprintf("Failed to determine the port for host: %s", uriComponents.Host)
-		log.Error(message)
-		return nil, errors.New(message)
+		return nil, fmt.Errorf("Failed to determine the port for host: %s", uriComponents.Host)
 	}
 
 	host, port, err := net.SplitHostPort(uriComponents.Host)
 	if err != nil {
-		log.Errorf("Failed to separate the host name from the port: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed to separate the host name from the port: %s", err)
 	}
 
 	if uriComponents.User == nil {

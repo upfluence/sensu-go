@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -20,8 +21,7 @@ func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
 	config, err := NewTransportConfig(uri)
 
 	if err != nil {
-		log.Errorf("Received invalid URI %s", err)
-		return nil, err
+		return nil, fmt.Errorf("Received invalid URI: %s", err)
 	}
 
 	return NewRabbitMQHATransport([]*TransportConfig{config}), nil

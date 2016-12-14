@@ -81,7 +81,7 @@ var transportConfigErrorTestScenarios = []struct {
 	},
 	{
 		"://",
-		errors.New("parse ://: missing protocol scheme"),
+		errors.New("Failed to parse the URI: parse ://: missing protocol scheme"),
 	},
 	{
 		"amqp://example.com/",
@@ -89,7 +89,7 @@ var transportConfigErrorTestScenarios = []struct {
 	},
 	{
 		"amqp://example.com::",
-		errors.New("too many colons in address example.com::"),
+		errors.New("Failed to separate the host name from the port: too many colons in address example.com::"),
 	},
 	{
 		"amqp://example.com:5672",
