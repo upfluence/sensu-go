@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/upfluence/sensu-client-go/Godeps/_workspace/src/github.com/streadway/amqp"
-	"github.com/upfluence/sensu-client-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
+	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/streadway/amqp"
+	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
 )
 
 type RabbitMQTransport struct {
