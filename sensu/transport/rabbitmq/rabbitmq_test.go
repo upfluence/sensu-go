@@ -28,6 +28,7 @@ func (*mockAmqpChannel) Consume(
 ) (<-chan amqp.Delivery, error) {
 	return nil, nil
 }
+
 func (*mockAmqpChannel) ExchangeDeclare(
 	string,
 	string,
@@ -39,18 +40,22 @@ func (*mockAmqpChannel) ExchangeDeclare(
 ) error {
 	return nil
 }
+
 func (*mockAmqpChannel) NotifyClose(c chan *amqp.Error) chan *amqp.Error {
 	// We need to close the channel here, in order to prevent the goroutine at
 	// the end of transport.Connect() from blocking indefinitely.
 	close(c)
 	return nil
 }
+
 func (*mockAmqpChannel) Publish(string, string, bool, bool, amqp.Publishing) error {
 	return nil
 }
+
 func (*mockAmqpChannel) QueueBind(string, string, string, bool, amqp.Table) error {
 	return nil
 }
+
 func (*mockAmqpChannel) QueueDeclare(
 	string,
 	bool,
@@ -66,7 +71,7 @@ type mockAmqpConnection struct {
 	heartbeat time.Duration
 }
 
-func (*mockAmqpConnection) Channel() (amqpChannel, error) {
+func (*mockAmqpConnection) Channel() (AmqpChannel, error) {
 	return dummyAmqpChannel, nil
 }
 
@@ -74,11 +79,11 @@ func (*mockAmqpConnection) Close() error {
 	return nil
 }
 
-func mockAmqpDialer(url string) (amqpConnection, error) {
+func mockAmqpDialer(url string) (AmqpConnection, error) {
 	return &mockAmqpConnection{}, nil
 }
 
-func mockAmqpDialerConfig(url string, config amqp.Config) (amqpConnection, error) {
+func mockAmqpDialerConfig(url string, config amqp.Config) (AmqpConnection, error) {
 	return &mockAmqpConnection{heartbeat: config.Heartbeat}, nil
 }
 
@@ -145,14 +150,14 @@ func TestTransportConnect(t *testing.T) {
 		}
 
 		if transport.Channel != nil {
-			t.Error(
+			t.Errorf(
 				"Expected channel to be nil, but got \"%+v\" instead",
 				transport.Channel,
 			)
 		}
 
 		if transport.Connection != nil {
-			t.Error(
+			t.Errorf(
 				"Expected connection to be nil, but got \"%+v\" instead",
 				transport.Connection,
 			)
@@ -160,10 +165,10 @@ func TestTransportConnect(t *testing.T) {
 	}
 }
 
-var dummyDialerError = errors.New("Dummy dialer error")
+var errFailedToConnect = errors.New("Dummy dialer error")
 
-func mockAmqpDialerError(url string) (amqpConnection, error) {
-	return nil, dummyDialerError
+func mockAmqpDialerError(url string) (AmqpConnection, error) {
+	return nil, errFailedToConnect
 }
 
 func TestTransportConnectError(t *testing.T) {
@@ -176,5 +181,5 @@ func TestTransportConnectError(t *testing.T) {
 
 	err := transport.Connect()
 
-	validateError(err, dummyDialerError, t)
+	validateError(err, errFailedToConnect, t)
 }

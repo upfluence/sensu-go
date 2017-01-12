@@ -10,7 +10,8 @@ import (
 	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
 )
 
-type amqpChannel interface {
+// AmqpChannel is an interface over amqp.Channel
+type AmqpChannel interface {
 	Consume(string, string, bool, bool, bool, bool, amqp.Table) (<-chan amqp.Delivery, error)
 	ExchangeDeclare(string, string, bool, bool, bool, bool, amqp.Table) error
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
@@ -19,12 +20,13 @@ type amqpChannel interface {
 	QueueDeclare(string, bool, bool, bool, bool, amqp.Table) (amqp.Queue, error)
 }
 
-type amqpConnection interface {
-	Channel() (amqpChannel, error)
+// AmqpConnection is an interface over amqp.Connection
+type AmqpConnection interface {
+	Channel() (AmqpChannel, error)
 	Close() error
 }
 
-// We need a wrapper for amqp.Connection in order to be able
+// Connection is a wrapper for amqp.Connection needed to be able
 // to assign the result of the dialer function to
 // RabbitMQTransport.Connection, because Go doesn't support
 // covariant return types
@@ -33,23 +35,27 @@ type Connection struct {
 	*amqp.Connection
 }
 
-func (c *Connection) Channel() (amqpChannel, error) {
+// Channel is a wrapper for amqp.Connection.Channel()
+func (c *Connection) Channel() (AmqpChannel, error) {
 	return c.Channel()
 }
 
+// Close is a wrapper for amqp.Connection.Close()
 func (c *Connection) Close() error {
 	return c.Close()
 }
 
+// RabbitMQTransport contains AMQP objects required to communicate with RabbitMQ
 type RabbitMQTransport struct {
-	Connection     amqpConnection
-	Channel        amqpChannel
+	Connection     AmqpConnection
+	Channel        AmqpChannel
 	ClosingChannel chan bool
 	Configs        []*TransportConfig
-	dialer         func(string) (amqpConnection, error)
-	dialerConfig   func(string, amqp.Config) (amqpConnection, error)
+	dialer         func(string) (AmqpConnection, error)
+	dialerConfig   func(string, amqp.Config) (AmqpConnection, error)
 }
 
+// NewRabbitMQTransport creates a RabbitMQTransport instance from a given URI
 func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
 	config, err := NewTransportConfig(uri)
 
@@ -60,7 +66,7 @@ func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
 	return NewRabbitMQHATransport([]*TransportConfig{config}), nil
 }
 
-func amqpDialer(url string) (amqpConnection, error) {
+func amqpDialer(url string) (AmqpConnection, error) {
 	var conn = &Connection{}
 	var err error
 	conn.Connection, err = amqp.Dial(url)
@@ -68,7 +74,7 @@ func amqpDialer(url string) (amqpConnection, error) {
 	return conn, err
 }
 
-func amqpDialerConfig(url string, config amqp.Config) (amqpConnection, error) {
+func amqpDialerConfig(url string, config amqp.Config) (AmqpConnection, error) {
 	var conn = &Connection{}
 	var err error
 	conn.Connection, err = amqp.DialConfig(url, config)
@@ -76,6 +82,9 @@ func amqpDialerConfig(url string, config amqp.Config) (amqpConnection, error) {
 	return conn, err
 }
 
+// NewRabbitMQTransport creates a RabbitMQTransport instance from a list of
+// TransportConfig objects in order to connect to a
+// High Availability RabbitMQ cluster
 func NewRabbitMQHATransport(configs []*TransportConfig) *RabbitMQTransport {
 	return &RabbitMQTransport{
 		ClosingChannel: make(chan bool),
