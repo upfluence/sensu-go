@@ -10,11 +10,44 @@ import (
 	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
 )
 
+type amqpChannel interface {
+	Consume(string, string, bool, bool, bool, bool, amqp.Table) (<-chan amqp.Delivery, error)
+	ExchangeDeclare(string, string, bool, bool, bool, bool, amqp.Table) error
+	NotifyClose(chan *amqp.Error) chan *amqp.Error
+	Publish(string, string, bool, bool, amqp.Publishing) error
+	QueueBind(string, string, string, bool, amqp.Table) error
+	QueueDeclare(string, bool, bool, bool, bool, amqp.Table) (amqp.Queue, error)
+}
+
+type amqpConnection interface {
+	Channel() (amqpChannel, error)
+	Close() error
+}
+
+// We need a wrapper for amqp.Connection in order to be able
+// to assign the result of the dialer function to
+// RabbitMQTransport.Connection, because Go doesn't support
+// covariant return types
+// Relevant discussion: https://github.com/streadway/amqp/issues/164
+type Connection struct {
+	*amqp.Connection
+}
+
+func (c *Connection) Channel() (amqpChannel, error) {
+	return c.Channel()
+}
+
+func (c *Connection) Close() error {
+	return c.Close()
+}
+
 type RabbitMQTransport struct {
-	Connection     *amqp.Connection
-	Channel        *amqp.Channel
+	Connection     amqpConnection
+	Channel        amqpChannel
 	ClosingChannel chan bool
 	Configs        []*TransportConfig
+	dialer         func(string) (amqpConnection, error)
+	dialerConfig   func(string, amqp.Config) (amqpConnection, error)
 }
 
 func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
@@ -27,10 +60,28 @@ func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
 	return NewRabbitMQHATransport([]*TransportConfig{config}), nil
 }
 
+func amqpDialer(url string) (amqpConnection, error) {
+	var conn = &Connection{}
+	var err error
+	conn.Connection, err = amqp.Dial(url)
+
+	return conn, err
+}
+
+func amqpDialerConfig(url string, config amqp.Config) (amqpConnection, error) {
+	var conn = &Connection{}
+	var err error
+	conn.Connection, err = amqp.DialConfig(url, config)
+
+	return conn, err
+}
+
 func NewRabbitMQHATransport(configs []*TransportConfig) *RabbitMQTransport {
 	return &RabbitMQTransport{
 		ClosingChannel: make(chan bool),
 		Configs:        configs,
+		dialer:         amqpDialer,
+		dialerConfig:   amqpDialerConfig,
 	}
 }
 
@@ -56,8 +107,7 @@ func (t *RabbitMQTransport) Connect() error {
 
 		// TODO: Add SSL support via amqp.DialTLS
 
-		heartbeatString := config.Heartbeat.String()
-		if heartbeatString != "" {
+		if heartbeatString := config.Heartbeat.String(); heartbeatString != "" {
 			var heartbeat time.Duration
 			heartbeat, err = time.ParseDuration(heartbeatString + "s")
 
@@ -66,13 +116,12 @@ func (t *RabbitMQTransport) Connect() error {
 				continue
 			}
 
-			t.Connection, err = amqp.DialConfig(
+			t.Connection, err = t.dialerConfig(
 				uri,
 				amqp.Config{Heartbeat: heartbeat},
 			)
 		} else {
-			// Use amqp.defaultHeartbeat (10s)
-			t.Connection, err = amqp.Dial(uri)
+			t.Connection, err = t.dialer(uri)
 		}
 
 		if err != nil {
@@ -126,6 +175,7 @@ func (t *RabbitMQTransport) Close() error {
 		t.Connection = nil
 	}()
 	t.Connection.Close()
+
 	return nil
 }
 
