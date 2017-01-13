@@ -82,7 +82,7 @@ func amqpDialerConfig(url string, config amqp.Config) (AmqpConnection, error) {
 	return conn, err
 }
 
-// NewRabbitMQTransport creates a RabbitMQTransport instance from a list of
+// NewRabbitMQHATransport creates a RabbitMQTransport instance from a list of
 // TransportConfig objects in order to connect to a
 // High Availability RabbitMQ cluster
 func NewRabbitMQHATransport(configs []*TransportConfig) *RabbitMQTransport {
