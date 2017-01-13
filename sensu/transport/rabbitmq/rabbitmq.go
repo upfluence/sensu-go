@@ -37,12 +37,12 @@ type Connection struct {
 
 // Channel is a wrapper for amqp.Connection.Channel()
 func (c *Connection) Channel() (AmqpChannel, error) {
-	return c.Channel()
+	return c.Connection.Channel()
 }
 
 // Close is a wrapper for amqp.Connection.Close()
 func (c *Connection) Close() error {
-	return c.Close()
+	return c.Connection.Close()
 }
 
 // RabbitMQTransport contains AMQP objects required to communicate with RabbitMQ
