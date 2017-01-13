@@ -288,10 +288,10 @@ func (t *RabbitMQTransport) Subscribe(key, exchangeName, queueName string, messa
 				messageChan <- delivery.Body
 			} else {
 				t.ClosingChannel <- true
-				break
+				return nil
 			}
 		case <-stopChan:
-			break
+			return nil
 		}
 	}
 }
