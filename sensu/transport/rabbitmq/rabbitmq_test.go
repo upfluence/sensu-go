@@ -11,13 +11,13 @@ import (
 )
 
 var (
-	dummyAmqpChannel = &mockAmqpChannel{}
+	dummyAMQPChannel = &mockAMQPChannel{}
 )
 
-type mockAmqpChannel struct {
+type mockAMQPChannel struct {
 }
 
-func (*mockAmqpChannel) Consume(
+func (*mockAMQPChannel) Consume(
 	string,
 	string,
 	bool,
@@ -29,7 +29,7 @@ func (*mockAmqpChannel) Consume(
 	return nil, nil
 }
 
-func (*mockAmqpChannel) ExchangeDeclare(
+func (*mockAMQPChannel) ExchangeDeclare(
 	string,
 	string,
 	bool,
@@ -41,22 +41,22 @@ func (*mockAmqpChannel) ExchangeDeclare(
 	return nil
 }
 
-func (*mockAmqpChannel) NotifyClose(c chan *amqp.Error) chan *amqp.Error {
+func (*mockAMQPChannel) NotifyClose(c chan *amqp.Error) chan *amqp.Error {
 	// We need to close the channel here, in order to prevent the goroutine at
 	// the end of transport.Connect() from blocking indefinitely.
 	close(c)
 	return nil
 }
 
-func (*mockAmqpChannel) Publish(string, string, bool, bool, amqp.Publishing) error {
+func (*mockAMQPChannel) Publish(string, string, bool, bool, amqp.Publishing) error {
 	return nil
 }
 
-func (*mockAmqpChannel) QueueBind(string, string, string, bool, amqp.Table) error {
+func (*mockAMQPChannel) QueueBind(string, string, string, bool, amqp.Table) error {
 	return nil
 }
 
-func (*mockAmqpChannel) QueueDeclare(
+func (*mockAMQPChannel) QueueDeclare(
 	string,
 	bool,
 	bool,
@@ -67,24 +67,24 @@ func (*mockAmqpChannel) QueueDeclare(
 	return amqp.Queue{}, nil
 }
 
-type mockAmqpConnection struct {
+type mockAMQPConnection struct {
 	heartbeat time.Duration
 }
 
-func (*mockAmqpConnection) Channel() (AmqpChannel, error) {
-	return dummyAmqpChannel, nil
+func (*mockAMQPConnection) Channel() (AMQPChannel, error) {
+	return dummyAMQPChannel, nil
 }
 
-func (*mockAmqpConnection) Close() error {
+func (*mockAMQPConnection) Close() error {
 	return nil
 }
 
-func mockAmqpDialer(url string) (AmqpConnection, error) {
-	return &mockAmqpConnection{}, nil
+func mockAMQPDialer(url string) (AMQPConnection, error) {
+	return &mockAMQPConnection{}, nil
 }
 
-func mockAmqpDialerConfig(url string, config amqp.Config) (AmqpConnection, error) {
-	return &mockAmqpConnection{heartbeat: config.Heartbeat}, nil
+func mockAMQPDialerConfig(url string, config amqp.Config) (AMQPConnection, error) {
+	return &mockAMQPConnection{heartbeat: config.Heartbeat}, nil
 }
 
 func getDummyTransportConfig(heartbeat int) *TransportConfig {
@@ -117,15 +117,15 @@ func TestTransportConnect(t *testing.T) {
 		transport := &RabbitMQTransport{
 			ClosingChannel: make(chan bool),
 			Configs:        []*TransportConfig{scenario.config},
-			dialer:         mockAmqpDialer,
-			dialerConfig:   mockAmqpDialerConfig,
+			dialer:         mockAMQPDialer,
+			dialerConfig:   mockAMQPDialerConfig,
 		}
 
 		err := transport.Connect()
 
 		validateError(err, nil, t)
 
-		heartbeat := transport.Connection.(*mockAmqpConnection).heartbeat
+		heartbeat := transport.Connection.(*mockAMQPConnection).heartbeat
 		if heartbeat != scenario.expectedHeartbeat {
 			t.Errorf("Expected heartbeat to be \"%s\" but got \"%s\" instead",
 				scenario.expectedHeartbeat,
@@ -133,8 +133,8 @@ func TestTransportConnect(t *testing.T) {
 			)
 		}
 
-		if transport.Channel != dummyAmqpChannel {
-			t.Error("Expected transport.Channel to be set to dummyAmqpChannel")
+		if transport.Channel != dummyAMQPChannel {
+			t.Error("Expected transport.Channel to be set to dummyAMQPChannel")
 		}
 
 		channelClosed := <-transport.ClosingChannel
@@ -167,7 +167,7 @@ func TestTransportConnect(t *testing.T) {
 
 var errFailedToConnect = errors.New("Dummy dialer error")
 
-func mockAmqpDialerError(url string) (AmqpConnection, error) {
+func mockAMQPDialerError(url string) (AMQPConnection, error) {
 	return nil, errFailedToConnect
 }
 
@@ -175,8 +175,8 @@ func TestTransportConnectError(t *testing.T) {
 	transport := &RabbitMQTransport{
 		ClosingChannel: make(chan bool),
 		Configs:        []*TransportConfig{getDummyTransportConfig(0)},
-		dialer:         mockAmqpDialerError,
-		dialerConfig:   mockAmqpDialerConfig,
+		dialer:         mockAMQPDialerError,
+		dialerConfig:   mockAMQPDialerConfig,
 	}
 
 	err := transport.Connect()

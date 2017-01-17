@@ -10,8 +10,8 @@ import (
 	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/upfluence/goutils/log"
 )
 
-// AmqpChannel is an interface over amqp.Channel
-type AmqpChannel interface {
+// AMQPChannel is an interface over amqp.Channel
+type AMQPChannel interface {
 	Consume(string, string, bool, bool, bool, bool, amqp.Table) (<-chan amqp.Delivery, error)
 	ExchangeDeclare(string, string, bool, bool, bool, bool, amqp.Table) error
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
@@ -20,9 +20,9 @@ type AmqpChannel interface {
 	QueueDeclare(string, bool, bool, bool, bool, amqp.Table) (amqp.Queue, error)
 }
 
-// AmqpConnection is an interface over amqp.Connection
-type AmqpConnection interface {
-	Channel() (AmqpChannel, error)
+// AMQPConnection is an interface over amqp.Connection
+type AMQPConnection interface {
+	Channel() (AMQPChannel, error)
 	Close() error
 }
 
@@ -36,7 +36,7 @@ type Connection struct {
 }
 
 // Channel is a wrapper for amqp.Connection.Channel()
-func (c *Connection) Channel() (AmqpChannel, error) {
+func (c *Connection) Channel() (AMQPChannel, error) {
 	return c.Connection.Channel()
 }
 
@@ -47,12 +47,12 @@ func (c *Connection) Close() error {
 
 // RabbitMQTransport contains AMQP objects required to communicate with RabbitMQ
 type RabbitMQTransport struct {
-	Connection     AmqpConnection
-	Channel        AmqpChannel
+	Connection     AMQPConnection
+	Channel        AMQPChannel
 	ClosingChannel chan bool
 	Configs        []*TransportConfig
-	dialer         func(string) (AmqpConnection, error)
-	dialerConfig   func(string, amqp.Config) (AmqpConnection, error)
+	dialer         func(string) (AMQPConnection, error)
+	dialerConfig   func(string, amqp.Config) (AMQPConnection, error)
 }
 
 // NewRabbitMQTransport creates a RabbitMQTransport instance from a given URI
@@ -66,7 +66,7 @@ func NewRabbitMQTransport(uri string) (*RabbitMQTransport, error) {
 	return NewRabbitMQHATransport([]*TransportConfig{config}), nil
 }
 
-func amqpDialer(url string) (AmqpConnection, error) {
+func amqpDialer(url string) (AMQPConnection, error) {
 	var conn = &Connection{}
 	var err error
 	conn.Connection, err = amqp.Dial(url)
@@ -74,7 +74,7 @@ func amqpDialer(url string) (AmqpConnection, error) {
 	return conn, err
 }
 
-func amqpDialerConfig(url string, config amqp.Config) (AmqpConnection, error) {
+func amqpDialerConfig(url string, config amqp.Config) (AMQPConnection, error) {
 	var conn = &Connection{}
 	var err error
 	conn.Connection, err = amqp.DialConfig(url, config)
