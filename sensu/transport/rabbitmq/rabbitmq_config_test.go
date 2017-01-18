@@ -11,11 +11,11 @@ func validateStringParameter(
 	actual string,
 	expected string,
 	parameterName string,
-	t *testing.T) {
-
+	t *testing.T,
+) {
 	if actual != expected {
 		t.Errorf(
-			"Expected %s to be \"%s\" but got \"%s\" instead!",
+			"Expected \"%s\" to be \"%s\" but got \"%s\" instead",
 			parameterName,
 			expected,
 			actual,
@@ -24,13 +24,19 @@ func validateStringParameter(
 }
 
 func validateError(actual error, expected error, t *testing.T) {
-	if actual == nil {
-		t.Errorf("Expected error to be set but got nil instead!")
+	actualIsNil := actual == nil
+	expectedIsNil := expected == nil
+
+	if actualIsNil && expectedIsNil {
+		return
 	}
 
-	if actual.Error() != expected.Error() {
+	// XOR the hard way because Go doesn't have the logical XOR operator...
+	if actualIsNil != expectedIsNil ||
+		actual.Error() != expected.Error() {
+
 		t.Errorf(
-			"Expected error to be \"%s\" but got \"%s\" instead!",
+			"Expected error to be \"%v\" but got \"%v\" instead",
 			expected,
 			actual,
 		)
@@ -61,7 +67,7 @@ func TestNewTransportConfigHappyFlow(t *testing.T) {
 	}
 
 	if config == nil {
-		t.Errorf("Expected config to not be nil")
+		t.Fatalf("Expected config to not be nil")
 	}
 
 	validateStringParameter(config.Host, expectedHost, "host", t)
