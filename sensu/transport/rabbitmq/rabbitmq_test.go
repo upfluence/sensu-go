@@ -177,7 +177,7 @@ func TestTransportConnect(t *testing.T) {
 			)
 		}
 
-		if connection.channel.qos.global != false {
+		if connection.channel.qos.global {
 			t.Errorf(
 				"Expected qos global to be \"%t\" but got \"%t\" instead",
 				false,
