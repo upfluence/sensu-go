@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/streadway/amqp"
@@ -16,6 +17,7 @@ type AMQPChannel interface {
 	ExchangeDeclare(string, string, bool, bool, bool, bool, amqp.Table) error
 	NotifyClose(chan *amqp.Error) chan *amqp.Error
 	Publish(string, string, bool, bool, amqp.Publishing) error
+	Qos(int, int, bool) error
 	QueueBind(string, string, string, bool, amqp.Table) error
 	QueueDeclare(string, bool, bool, bool, bool, amqp.Table) (amqp.Queue, error)
 }
@@ -105,14 +107,12 @@ func (t *RabbitMQTransport) Connect() error {
 		randGenerator = rand.New(rand.NewSource(time.Now().UnixNano()))
 	)
 
+	var config *TransportConfig
 	for _, idx := range randGenerator.Perm(len(t.Configs)) {
-		config := t.Configs[idx]
+		config = t.Configs[idx]
 		uri = config.GetURI()
 
 		log.Noticef("Trying to connect to URI: %s", uri)
-
-		// TODO: Figure out how to specify the Prefetch value as well
-		// See amqp.Channel.Qos (it doesn't seem to be used currently)
 
 		// TODO: Add SSL support via amqp.DialTLS
 
@@ -121,7 +121,11 @@ func (t *RabbitMQTransport) Connect() error {
 			heartbeat, err = time.ParseDuration(heartbeatString + "s")
 
 			if err != nil {
-				log.Warningf("Failed to parse the heartbeat: %s", uri, err.Error())
+				log.Warningf(
+					"Failed to parse the heartbeat value \"%s\": %s",
+					heartbeat,
+					err.Error(),
+				)
 				continue
 			}
 
@@ -134,7 +138,7 @@ func (t *RabbitMQTransport) Connect() error {
 		}
 
 		if err != nil {
-			log.Warningf("Failed to connect to URI %s: %s", uri, err.Error())
+			log.Warningf("Failed to connect to URI \"%s\": %s", uri, err.Error())
 			continue
 		}
 
@@ -151,6 +155,27 @@ func (t *RabbitMQTransport) Connect() error {
 	if err != nil {
 		log.Errorf("RabbitMQ channel error: %s", err.Error())
 		return err
+	}
+
+	if prefetchString := config.Prefetch.String(); prefetchString != "" {
+		var prefetch int
+		prefetch, err = strconv.Atoi(prefetchString)
+
+		if err != nil {
+			log.Warningf(
+				"Failed to parse the prefetch value \"%s\": %s",
+				prefetchString,
+				err.Error(),
+			)
+		} else {
+			// Relevant code for what https://github.com/sensu/sensu is doing with this value:
+			// https://github.com/sensu/sensu-transport/blob/f9c8cc0900fbef5fe9048c86116bd49efc71d801/lib/sensu/transport/rabbitmq.rb#L249
+			// https://github.com/ruby-amqp/amqp/blob/9880a2b5dcfe4b27cefbdb3b3e2ea3ec58ea348a/lib/amqp/channel.rb#L998
+			// https://github.com/ruby-amqp/amqp/blob/9880a2b5dcfe4b27cefbdb3b3e2ea3ec58ea348a/lib/amqp/channel.rb#L1214
+			if err = t.Channel.Qos(prefetch, 0, false); err != nil {
+				log.Warningf("Failed to set the prefetch value: %s", err.Error())
+			}
+		}
 	}
 
 	log.Noticef("RabbitMQ connection and channel opened to %s", uri)
@@ -183,7 +208,11 @@ func (t *RabbitMQTransport) Close() error {
 		t.Channel = nil
 		t.Connection = nil
 	}()
-	t.Connection.Close()
+	err := t.Connection.Close()
+
+	if err != nil {
+		return fmt.Errorf("Failed to close the connection: %s", err.Error())
+	}
 
 	return nil
 }
