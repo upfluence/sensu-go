@@ -162,17 +162,19 @@ func (t *RabbitMQTransport) Connect() error {
 		prefetch, err = strconv.Atoi(prefetchString)
 
 		if err != nil {
-			log.Warningf("Failed to parse the prefetch value \"%s\": %s", err.Error())
-		}
-
-		// Relevant code for what https://github.com/sensu/sensu is doing with this value:
-		// https://github.com/sensu/sensu-transport/blob/f9c8cc0900fbef5fe9048c86116bd49efc71d801/lib/sensu/transport/rabbitmq.rb#L249
-		// https://github.com/ruby-amqp/amqp/blob/9880a2b5dcfe4b27cefbdb3b3e2ea3ec58ea348a/lib/amqp/channel.rb#L998
-		// https://github.com/ruby-amqp/amqp/blob/9880a2b5dcfe4b27cefbdb3b3e2ea3ec58ea348a/lib/amqp/channel.rb#L1214
-		err = t.Channel.Qos(prefetch, 0, false)
-
-		if err != nil {
-			log.Warningf("Failed to set the prefetch value: %s", err.Error())
+			log.Warningf(
+				"Failed to parse the prefetch value \"%s\": %s",
+				prefetchString,
+				err.Error(),
+			)
+		} else {
+			// Relevant code for what https://github.com/sensu/sensu is doing with this value:
+			// https://github.com/sensu/sensu-transport/blob/f9c8cc0900fbef5fe9048c86116bd49efc71d801/lib/sensu/transport/rabbitmq.rb#L249
+			// https://github.com/ruby-amqp/amqp/blob/9880a2b5dcfe4b27cefbdb3b3e2ea3ec58ea348a/lib/amqp/channel.rb#L998
+			// https://github.com/ruby-amqp/amqp/blob/9880a2b5dcfe4b27cefbdb3b3e2ea3ec58ea348a/lib/amqp/channel.rb#L1214
+			if err = t.Channel.Qos(prefetch, 0, false); err != nil {
+				log.Warningf("Failed to set the prefetch value: %s", err.Error())
+			}
 		}
 	}
 
