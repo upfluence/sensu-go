@@ -206,7 +206,11 @@ func (t *RabbitMQTransport) Close() error {
 		t.Channel = nil
 		t.Connection = nil
 	}()
-	t.Connection.Close()
+	err := t.Connection.Close()
+
+	if err != nil {
+		return fmt.Errorf("Failed to close the connection: %s", err.Error())
+	}
 
 	return nil
 }
