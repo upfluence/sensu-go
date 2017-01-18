@@ -52,6 +52,10 @@ func (*mockAMQPChannel) Publish(string, string, bool, bool, amqp.Publishing) err
 	return nil
 }
 
+func (*mockAMQPChannel) Qos(int, int, bool) error {
+	return nil
+}
+
 func (*mockAMQPChannel) QueueBind(string, string, string, bool, amqp.Table) error {
 	return nil
 }
@@ -176,7 +180,6 @@ func TestTransportConnectError(t *testing.T) {
 		ClosingChannel: make(chan bool),
 		Configs:        []*TransportConfig{getDummyTransportConfig(0)},
 		dialer:         mockAMQPDialerError,
-		dialerConfig:   mockAMQPDialerConfig,
 	}
 
 	err := transport.Connect()
