@@ -230,3 +230,31 @@ func TestTransportConnectError(t *testing.T) {
 
 	validateError(err, errFailedToConnect, t)
 }
+
+func TestTransportSubscribe(t *testing.T) {
+	transport := &RabbitMQTransport{
+		ClosingChannel: make(chan bool),
+		Configs:        []*TransportConfig{getDummyTransportConfig(0, 0)},
+		dialer:         mockAMQPDialer,
+	}
+
+	err := transport.Connect()
+
+	validateError(err, nil, t)
+
+	stopChan := make(chan bool)
+
+	waitForSubscribe := make(chan bool)
+
+	go func() {
+		err = transport.Subscribe("", "", "", nil, stopChan)
+
+		validateError(err, nil, t)
+
+		waitForSubscribe <- true
+	}()
+
+	stopChan <- true
+
+	<-waitForSubscribe
+}

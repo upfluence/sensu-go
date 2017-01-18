@@ -37,7 +37,7 @@ func UnmarshalEvent(blob []byte) (*Event, error) {
 
 	if err == nil {
 		for _, rawHistory := range event.Check.RawHistory {
-			if i, err := strconv.Atoi(rawHistory); err == nil {
+			if i, errConv := strconv.Atoi(rawHistory); errConv == nil {
 				event.Check.History = append(event.Check.History, check.ExitStatus(i))
 			}
 		}
