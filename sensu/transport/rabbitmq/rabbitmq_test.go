@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/upfluence/sensu-go/Godeps/_workspace/src/github.com/streadway/amqp"
+	"github.com/streadway/amqp"
 )
 
 type mockAMQPChannel struct {
