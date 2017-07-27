@@ -8,7 +8,6 @@ package amqp
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"io"
 	"time"
 )
@@ -67,7 +66,7 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 
 	case frameBody:
 		if frame, err = me.parseBodyFrame(channel, size); err != nil {
-			return nil, err
+			return
 		}
 
 	case frameHeartbeat:
@@ -80,7 +79,7 @@ func (me *reader) ReadFrame() (frame frame, err error) {
 	}
 
 	if _, err = io.ReadFull(me.r, scratch[:1]); err != nil {
-		return nil, err
+		return
 	}
 
 	if scratch[0] != frameEnd {
@@ -426,13 +425,11 @@ func (me *reader) parseBodyFrame(channel uint16, size uint32) (frame frame, err 
 	}
 
 	if _, err = io.ReadFull(me.r, bf.Body); err != nil {
-		return nil, err
+		return
 	}
 
 	return bf, nil
 }
-
-var errHeartbeatPayload = errors.New("Heartbeats should not have a payload")
 
 func (me *reader) parseHeartbeatFrame(channel uint16, size uint32) (frame frame, err error) {
 	hf := &heartbeatFrame{
@@ -440,7 +437,7 @@ func (me *reader) parseHeartbeatFrame(channel uint16, size uint32) (frame frame,
 	}
 
 	if size > 0 {
-		return nil, errHeartbeatPayload
+		panic("Heartbeats should not have a payload")
 	}
 
 	return hf, nil

@@ -6,6 +6,7 @@
 package amqp
 
 import (
+	"container/heap"
 	"reflect"
 	"sync"
 )
@@ -53,9 +54,15 @@ type Channel struct {
 	// a consumer has been cancelled.
 	cancels []chan string
 
-	// Allocated when in confirm mode in order to track publish counter and order confirms
-	confirms   *confirms
-	confirming bool
+	// Listeners for Acks/Nacks when the channel is in Confirm mode
+	// the value is the sequentially increasing delivery tag
+	// starting at 1 immediately after the Confirm
+	acks  []chan uint64
+	nacks []chan uint64
+
+	// When in confirm mode, track publish counter and order confirms
+	confirms       tagSet
+	publishCounter uint64
 
 	// Selects on any errors from shutdown during RPC
 	errors chan *Error
@@ -80,7 +87,6 @@ func newChannel(c *Connection, id uint16) *Channel {
 		id:         id,
 		rpc:        make(chan message),
 		consumers:  makeConsumers(),
-		confirms:   newConfirms(),
 		recv:       (*Channel).recvMethod,
 		send:       (*Channel).sendOpen,
 		errors:     make(chan *Error, 1),
@@ -126,8 +132,22 @@ func (me *Channel) shutdown(e *Error) {
 			close(c)
 		}
 
-		if me.confirms != nil {
-			me.confirms.Close()
+		// A seen map to keep from double closing the ack and nacks. the other
+		// channels are different types and are not shared
+		seen := make(map[chan uint64]bool)
+
+		for _, c := range me.acks {
+			if !seen[c] {
+				close(c)
+				seen[c] = true
+			}
+		}
+
+		for _, c := range me.nacks {
+			if !seen[c] {
+				close(c)
+				seen[c] = true
+			}
 		}
 
 		me.noNotify = true
@@ -197,15 +217,7 @@ func (me *Channel) sendOpen(msg message) (err error) {
 	if content, ok := msg.(messageWithContent); ok {
 		props, body := content.getContent()
 		class, _ := content.id()
-
-		// catch client max frame size==0 and server max frame size==0
-		// set size to length of what we're trying to publish
-		var size int
-		if me.connection.Config.FrameSize > 0 {
-			size = me.connection.Config.FrameSize - frameHeaderSize
-		} else {
-			size = len(body)
-		}
+		size := me.connection.Config.FrameSize - frameHeaderSize
 
 		if err = me.connection.send(&methodFrame{
 			ChannelId: me.id,
@@ -223,7 +235,6 @@ func (me *Channel) sendOpen(msg message) (err error) {
 			return
 		}
 
-		// chunk body into size (max frame size - frame header size)
 		for i, j := 0, size; i < len(body); i, j = j, j+size {
 			if j > len(body) {
 				j = len(body)
@@ -273,21 +284,17 @@ func (me *Channel) dispatch(msg message) {
 		}
 
 	case *basicAck:
-		if me.confirming {
-			if m.Multiple {
-				me.confirms.Multiple(Confirmation{m.DeliveryTag, true})
-			} else {
-				me.confirms.One(Confirmation{m.DeliveryTag, true})
-			}
+		if m.Multiple {
+			me.confimMultiple(m.DeliveryTag, me.acks)
+		} else {
+			me.confimOne(m.DeliveryTag, me.acks)
 		}
 
 	case *basicNack:
-		if me.confirming {
-			if m.Multiple {
-				me.confirms.Multiple(Confirmation{m.DeliveryTag, false})
-			} else {
-				me.confirms.One(Confirmation{m.DeliveryTag, false})
-			}
+		if m.Multiple {
+			me.confimMultiple(m.DeliveryTag, me.nacks)
+		} else {
+			me.confimOne(m.DeliveryTag, me.nacks)
 		}
 
 	case *basicDeliver:
@@ -520,66 +527,91 @@ func (me *Channel) NotifyCancel(c chan string) chan string {
 }
 
 /*
-NotifyConfirm calls NotifyPublish and starts a goroutines sending
-ordered Ack and Nack DeliveryTag to the respective channels.
+NotifyConfirm registers a listener chan for reliable publishing to receive
+basic.ack and basic.nack messages.  These messages will be sent by the server
+for every publish after Channel.Confirm has been called.  The value sent on
+these channels is the sequence number of the publishing.  It is up to client of
+this channel to maintain the sequence number of each publishing and handle
+resends on basic.nack.
 
-For strict ordering, use NotifyPublish instead.
-*/
-func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
-	confirms := me.NotifyPublish(make(chan Confirmation, len(ack)+len(nack)))
-
-	go func() {
-		for c := range confirms {
-			if c.Ack {
-				ack <- c.DeliveryTag
-			} else {
-				nack <- c.DeliveryTag
-			}
-		}
-		close(ack)
-		if nack != ack {
-			close(nack)
-		}
-	}()
-
-	return ack, nack
-}
-
-/*
-NotifyPublish registers a listener for reliable publishing. Receives from this
-chan for every publish after Channel.Confirm will be in order starting with
-DeliveryTag 1.
-
-There will be one and only one Confimration Publishing starting with the
-delviery tag of 1 and progressing sequentially until the total number of
-Publishings have been seen by the server.
+There will be either at most one Ack or Nack delivered for every Publishing.
 
 Acknowledgments will be received in the order of delivery from the
-NotifyPublish channels even if the server acknowledges them out of order.
+NotifyConfirm channels even if the server acknowledges them out of order.
 
-The listener chan will be closed when the Channel is closed.
-
-The capacity of the chan Confirmation must be at least as large as the
+The capacity of the ack and nack channels must be at least as large as the
 number of outstanding publishings.  Not having enough buffered chans will
 create a deadlock if you attempt to perform other operations on the Connection
 or Channel while confirms are in-flight.
 
-It's advisable to wait for all Confirmations to arrive before calling
-Channel.Close() or Connection.Close().
+It's advisable to wait for all acks or nacks to arrive before calling
+Channel.Close().
 
 */
-func (me *Channel) NotifyPublish(confirm chan Confirmation) chan Confirmation {
+func (me *Channel) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
 	me.m.Lock()
 	defer me.m.Unlock()
 
 	if me.noNotify {
-		close(confirm)
+		close(ack)
+		close(nack)
 	} else {
-		me.confirms.Listen(confirm)
+		me.acks = append(me.acks, ack)
+		me.nacks = append(me.nacks, nack)
 	}
 
-	return confirm
+	return ack, nack
+}
 
+// Since the acknowledgments may come out of order, scan the heap
+// until found.  In most cases, only the head will be found.
+func (me *Channel) confimOne(tag uint64, ch []chan uint64) {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if me.confirms != nil {
+		var unacked []uint64
+
+		for {
+			// We expect once and only once delivery
+			next := heap.Pop(&me.confirms).(uint64)
+
+			if next != tag {
+				unacked = append(unacked, next)
+			} else {
+				for _, c := range ch {
+					c <- tag
+				}
+				break
+			}
+		}
+
+		for _, pending := range unacked {
+			heap.Push(&me.confirms, pending)
+		}
+	}
+}
+
+// Instead of pushing the pending acknowledgments, deliver them as we should ack
+// all up until this tag.
+func (me *Channel) confimMultiple(tag uint64, ch []chan uint64) {
+	me.m.Lock()
+	defer me.m.Unlock()
+
+	if me.confirms != nil {
+		for {
+			// We expect once and only once delivery
+			next := heap.Pop(&me.confirms).(uint64)
+
+			for _, c := range ch {
+				c <- next
+			}
+
+			if next == tag {
+				break
+			}
+		}
+	}
 }
 
 /*
@@ -606,7 +638,7 @@ To get round-robin behavior between consumers consuming from the same queue on
 different connections, set the prefetch count to 1, and the next available
 message on the server will be delivered to the next available consumer.
 
-If your consumer work time is reasonably consistent and not much greater
+If your consumer work time is reasonably is consistent and not much greater
 than two times your network round trip time, you will see significant
 throughput improvements starting with a prefetch count of 2 or slightly
 greater as described by benchmarks on RabbitMQ.
@@ -1287,12 +1319,9 @@ is shutdown without pending publishing packets being flushed from the kernel
 buffers.  The easy way of making it probable that all publishings reach the
 server is to always call Connection.Close before terminating your publishing
 application.  The way to ensure that all publishings reach the server is to add
-a listener to Channel.NotifyPublish and put the channel in confirm mode with
-Channel.Confirm.  Publishing delivery tags and their corresponding
-confirmations start at 1.  Exit when all publishings are confirmed.
-
-When Publish does not return an error and the channel is in confirm mode, the
-internal counter for DeliveryTags with the first confirmation starting at 1.
+a listener to Channel.NotifyConfirm and keep track of the server acks and nacks
+for every publishing you publish, only exiting when all publishings are
+accounted for.
 
 */
 func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg Publishing) error {
@@ -1328,8 +1357,10 @@ func (me *Channel) Publish(exchange, key string, mandatory, immediate bool, msg 
 		return err
 	}
 
-	if me.confirming {
-		me.confirms.Publish()
+	me.publishCounter += 1
+
+	if me.confirms != nil {
+		heap.Push(&me.confirms, me.publishCounter)
 	}
 
 	return nil
@@ -1457,9 +1488,9 @@ mode, the server will send a basic.ack or basic.nack message with the deliver
 tag set to a 1 based incrementing index corresponding to every publishing
 received after the this method returns.
 
-Add a listener to Channel.NotifyPublish to respond to the Confirmations. If
-Channel.NotifyPublish is not called, the Confirmations will be silently
-ignored.
+Add a listener to Channel.NotifyConfirm to respond to the acknowledgments and
+negative acknowledgments before publishing.  If Channel.NotifyConfirm is not
+called, the Ack/Nacks will be silently ignored.
 
 The order of acknowledgments is not bound to the order of deliveries.
 
@@ -1486,7 +1517,8 @@ func (me *Channel) Confirm(noWait bool) error {
 		return err
 	}
 
-	me.confirming = true
+	// Indicates we're in confirm mode
+	me.confirms = make(tagSet, 0)
 
 	return nil
 }
